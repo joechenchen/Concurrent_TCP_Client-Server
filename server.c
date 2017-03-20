@@ -1,134 +1,124 @@
 /*
-** server.c -- a stream socket server demo
+███████╗    ███████╗    ██████╗     ██╗   ██╗    ███████╗    ██████╗             ██████╗
+██╔════╝    ██╔════╝    ██╔══██╗    ██║   ██║    ██╔════╝    ██╔══██╗           ██╔════╝
+███████╗    █████╗      ██████╔╝    ██║   ██║    █████╗      ██████╔╝           ██║     
+╚════██║    ██╔══╝      ██╔══██╗    ╚██╗ ██╔╝    ██╔══╝      ██╔══██╗           ██║     
+███████║    ███████╗    ██║  ██║     ╚████╔╝     ███████╗    ██║  ██║    ██╗    ╚██████╗
+╚══════╝    ╚══════╝    ╚═╝  ╚═╝      ╚═══╝      ╚══════╝    ╚═╝  ╚═╝    ╚═╝     ╚═════╝
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <sys/wait.h>
-#include <signal.h>
+#include "unp.h"
 
-#define PORT "3490"  // the port users will be connecting to
+int main(int argc, char **argv) {
 
-#define BACKLOG 10	 // how many pending connections queue will hold
+	int listenfd, connfd;
+	pid_t childpid;
+	socklen_t clilen;
+	struct sockaddr_in cliaddr, servaddr;
+	int opt ;
+	
+	listenfd = Socket(AF_INET, SOCK_STREAM, 0);
+	
+	bzero(&servaddr, sizeof(servaddr));
+	servaddr.sin_family		= AF_INET;
+	servaddr.sin_addr.s_addr= htonl(INADDR_ANY);
 
-void sigchld_handler(int s)
-{
-	// waitpid() might overwrite errno, so we save and restore it:
-	int saved_errno = errno;
-
-	while(waitpid(-1, NULL, WNOHANG) > 0);
-
-	errno = saved_errno;
-}
-
-
-// get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
-	if (sa->sa_family == AF_INET) {
-		return &(((struct sockaddr_in*)sa)->sin_addr);
+	
+	if( argc != 2) {
+		err_quit("usage: ./server <Port Number> \n");
 	}
 
-	return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
+	servaddr.sin_port		= htons(atoi(argv[1]));
+	
+	struct ifaddrs* ifap, *ifa;
+	struct sockaddr_in *sa;
+	char* addr;
 
-int main(void)
-{
-	int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
-	struct addrinfo hints, *servinfo, *p;
-	struct sockaddr_storage their_addr; // connector's address information
-	socklen_t sin_size;
-	struct sigaction sa;
-	int yes=1;
-	char s[INET6_ADDRSTRLEN];
-	int rv;
+	getifaddrs(&ifap);
+	for( ifa = ifap; ifa; ifa = ifa->ifa_next) {
 
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE; // use my IP
+		if( ifa->ifa_addr->sa_family == AF_INET) {
 
-	if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-		return 1;
-	}
-
-	// loop through all the results and bind to the first we can
-	for(p = servinfo; p != NULL; p = p->ai_next) {
-		if ((sockfd = socket(p->ai_family, p->ai_socktype,
-				p->ai_protocol)) == -1) {
-			perror("server: socket");
-			continue;
+			sa = (struct sockaddr_in *) ifa->ifa_addr;
+			addr = inet_ntoa(sa->sin_addr);
+			printf("Connect to Interface: %s\tAddress: %s\n", ifa->ifa_name, addr);
 		}
-
-		if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
-				sizeof(int)) == -1) {
-			perror("setsockopt");
-			exit(1);
-		}
-
-		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-			close(sockfd);
-			perror("server: bind");
-			continue;
-		}
-
-		break;
 	}
 
-	freeaddrinfo(servinfo); // all done with this structure
+	Bind(listenfd, (SA *) &servaddr, sizeof(servaddr));
+	
+	Listen(listenfd, LISTENQ);
+	
+	for( ; ;) {
 
-	if (p == NULL)  {
-		fprintf(stderr, "server: failed to bind\n");
-		exit(1);
-	}
+	
+		clilen = sizeof(cliaddr);
+		connfd = Accept(listenfd, (SA *) &cliaddr, &clilen);
+	
+		if( (childpid = Fork()) == 0) {
+		
+			Close(listenfd);
+			
+			unsigned short name_size = 64;
+			char temp[name_size];
+			bzero(temp, name_size);
 
-	if (listen(sockfd, BACKLOG) == -1) {
-		perror("listen");
-		exit(1);
-	}
+			Read(connfd, temp, name_size);
+			FILE* fp;
+			unsigned short server_name_size = 128;
+			char new_name[server_name_size];
+			
+			if( access( temp, F_OK) != -1) {
 
-	sa.sa_handler = sigchld_handler; // reap all dead processes
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART;
-	if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-		perror("sigaction");
-		exit(1);
-	}
+					// file exists
+					bzero(new_name, server_name_size);
+				do {
 
-	printf("server: waiting for connections...\n");
+					time_t now = time(NULL);
+					strcpy(new_name, temp);
 
-	while(1) {  // main accept() loop
-		sin_size = sizeof their_addr;
-		new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
-		if (new_fd == -1) {
-			perror("accept");
-			continue;
-		}
+					strcat(new_name,ctime(&now));
+					char* d = new_name;
+					char* s = new_name;
+					do while(isspace(*s)) s++; while(*d++ = *s++);
+						
+				 } while( access( new_name, F_OK ) != -1 ); 
 
-		inet_ntop(their_addr.ss_family,
-			get_in_addr((struct sockaddr *)&their_addr),
-			s, sizeof s);
-		printf("server: got connection from %s\n", s);
+				Writen(connfd, new_name, strlen(new_name));
+//				printf("filename: X%sX \n", new_name);
+//				fflush(stdout);
+				fp = Fopen( new_name, "ab+");
+			}
+			else {
 
-		if (!fork()) { // this is the child process
-			close(sockfd); // child doesn't need the listener
-			if (send(new_fd, "Hello, world!", 13, 0) == -1)
-				perror("send");
-			close(new_fd);
+//				printf("filename: %s \n", temp);
+				strcpy(new_name, temp);
+				fp = Fopen( new_name, "ab+");
+			}			
+
+			str_serv(fp, connfd);
+			
+			Fclose(fp);
+
+/*
+			fp = Fopen( new_name, "ab+");
+			ssize_t read;                                                                                             
+			char line[MAXLINE];                                                                                       
+			size_t len;   
+
+
+			while( fgets(line, sizeof(line),fp)) {                                                          
+		//		printf("%s", line);
+				reverse_string(line);                                                                                 
+				printf("%s", line);
+				Fputs(line, fp);                                                                                      
+			}        
+//			printf("server closing file\n");
+			Fclose(fp);
+
+*/
 			exit(0);
 		}
-		close(new_fd);  // parent doesn't need this
 	}
-
-	return 0;
+	Close(connfd);
 }
-

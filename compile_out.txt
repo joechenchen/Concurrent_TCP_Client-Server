@@ -1,0 +1,80 @@
+clang -c -g -Wall  server.c
+server.c:83:15: warning: implicit declaration of function 'isspace' is invalid in C99 [-Wimplicit-function-declaration]
+                                        do while(isspace(*s)) s++; while(*d++ = *s++);
+                                                 ^
+server.c:83:44: warning: using the result of an assignment as a condition without parentheses [-Wparentheses]
+                                        do while(isspace(*s)) s++; while(*d++ = *s++);
+                                                                         ~~~~~^~~~~~
+server.c:83:44: note: place parentheses around the assignment to silence this warning
+                                        do while(isspace(*s)) s++; while(*d++ = *s++);
+                                                                              ^
+                                                                         (          )
+server.c:83:44: note: use '==' to turn this assignment into an equality comparison
+                                        do while(isspace(*s)) s++; while(*d++ = *s++);
+                                                                              ^
+                                                                              ==
+server.c:18:6: warning: unused variable 'opt' [-Wunused-variable]
+        int opt ;
+            ^
+3 warnings generated.
+clang -c -g -Wall  wrapsock.c
+clang -c -g -Wall  wrapunix.c
+clang -c -g -Wall  str_echo.c
+clang -c -g -Wall  writen.c
+clang -c -g -Wall  error.c
+error.c:102:17: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+                syslog(level, buf);
+                              ^~~
+1 warning generated.
+clang -c -g -Wall  str_cli.c
+str_cli.c:16:20: warning: incompatible pointer types passing 'char [4096]' to parameter of type 'unsigned short *' [-Wincompatible-pointer-types]
+                checksum = csum( sendline, MAXLINE);
+                                 ^~~~~~~~
+./unp.h:277:36: note: passing argument to parameter here
+unsigned short csum(unsigned short*, int);
+                                   ^
+str_cli.c:36:46: warning: ^ has lower precedence than ==; == will be evaluated first [-Wparentheses]
+                printf( "packet %d : %s\n", ++i,  checksum ^ recvline[0] == 0 ? "good checksum" : "bad checksum");
+                                                           ^~~~~~~~~~~~~~~~~~
+str_cli.c:36:46: note: place parentheses around the '==' expression to silence this warning
+                printf( "packet %d : %s\n", ++i,  checksum ^ recvline[0] == 0 ? "good checksum" : "bad checksum");
+                                                           ^
+                                                             (               )
+str_cli.c:36:46: note: place parentheses around the ^ expression to evaluate it first
+                printf( "packet %d : %s\n", ++i,  checksum ^ recvline[0] == 0 ? "good checksum" : "bad checksum");
+                                                           ^
+                                                  (                     )
+str_cli.c:20:7: warning: unused variable 'result' [-Wunused-variable]
+  int result = setsockopt(sockfd,            /* socket affected */
+      ^
+str_cli.c:61:22: warning: incompatible pointer types passing 'char [4096]' to parameter of type 'unsigned short *' [-Wincompatible-pointer-types]
+                sendline[0] = csum(recvline, strlen(recvline));
+                                   ^~~~~~~~
+./unp.h:277:36: note: passing argument to parameter here
+unsigned short csum(unsigned short*, int);
+                                   ^
+str_cli.c:52:6: warning: unused variable 'i' [-Wunused-variable]
+        int i = 0;
+            ^
+5 warnings generated.
+clang -c -g -Wall  wrapstdio.c
+clang -c -g -Wall  readline.c
+clang -c -g -Wall  csum.c
+clang -g -o server server.o wrapsock.o wrapunix.o str_echo.o writen.o error.o str_cli.o wrapstdio.o readline.o csum.o 
+clang -c -g -Wall  client.c
+client.c:33:6: warning: variable 'fp' is used uninitialized whenever 'if' condition is false [-Wsometimes-uninitialized]
+        if( access( argv[3], F_OK) != -1) {
+            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+client.c:46:10: note: uninitialized use occurs here
+        str_cli(fp, sockfd);
+                ^~
+client.c:33:2: note: remove the 'if' if its condition is always true
+        if( access( argv[3], F_OK) != -1) {
+        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+client.c:31:10: note: initialize the variable 'fp' to silence this warning
+        FILE* fp; 
+                ^
+                 = NULL
+1 warning generated.
+clang -c -g -Wall  wraplib.c
+clang -g -o client client.o wrapsock.o wrapunix.o str_echo.o writen.o error.o wraplib.o str_cli.o wrapstdio.o readline.o csum.o 
